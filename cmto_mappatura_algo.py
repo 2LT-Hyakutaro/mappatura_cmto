@@ -1,20 +1,9 @@
 """
-QGIS Processing Algorithm – Strade Sampler
+QGIS Processing Algorithm – cmto_mappatura_algo
 ==========================================
-Samples a named line feature from the 'strade' layer every 20 metres.
-For each sample point it records:
-  - Distance along the line (m)
-  - Latitude / Longitude (WGS 84, EPSG:4326)
-  - Heading toward the next sample point (degrees, 0 = North, clockwise)
 
-The result is written to a JSON file.
-
-Assumptions
------------
-- The 'strade' layer is loaded in the current QGIS project.
-- The field that stores each feature's unique name is called 'name'.
-  → Change NAME_FIELD below if your field has a different name.
-- The layer CRS is EPSG:32632 (UTM zone 32N).
+L'algoritmo, da eseguire sul layer 'strade provinciali', prende come parametro in ingresso il nome di una strada (formato 'pXXX') 
+e produce una lista di coordinate di punti posti a intervalli fissi lungo la strada.
 """
 
 from qgis.core import (
@@ -32,27 +21,27 @@ import json
 
 
 # ── Configuration ────────────────────────────────────────────────────────────
-LAYER_NAME  = 'strade'       # Name of the vector layer in the QGIS project
-NAME_FIELD  = 'name'         # Attribute field that holds each feature's name
-STRIDE_M    = 20.0           # Sampling interval in metres
-SRC_CRS     = 'EPSG:32632'   # CRS of the layer
-DST_CRS     = 'EPSG:4326'    # Target CRS for output (WGS 84)
+LAYER_NAME  = 'Strade provinciali'       # Name of the vector layer in the QGIS project
+NAME_FIELD  = 'elemento'                 # Attribute field that holds each feature's name
+STRIDE_M    = 20.0                       # Sampling interval in metres
+SRC_CRS     = 'EPSG:32632'               # CRS of the layer
+DST_CRS     = 'EPSG:4326'                # Target CRS for output (WGS 84)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 class StradeSampler(QgsProcessingAlgorithm):
 
     # Parameter keys
-    PARAM_NAME   = 'NAME'
+    PARAM_ROAD   = 'ROAD'
     PARAM_OUTPUT = 'OUTPUT'
 
     # ── Algorithm metadata ────────────────────────────────────────────────────
 
     def name(self):
-        return 'strade_sampler'
+        return 'cmto_mappatura_algo'
 
     def displayName(self):
-        return 'Strade – Sample line by name'
+        return 'Mappatura automatica elementi sicurezza CMTO'
 
     def group(self):
         return 'Custom'
@@ -62,13 +51,14 @@ class StradeSampler(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return (
-            "Samples a named line feature from the '{}' layer every {} m.\n\n"
-            "For every sample point the algorithm records:\n"
-            "  • Distance along the line (m)\n"
-            "  • Latitude and Longitude (WGS 84)\n"
-            "  • Compass heading toward the next point (°)\n\n"
-            "Results are saved as a JSON file."
-        ).format(LAYER_NAME, int(STRIDE_M))
+            '''L'algoritmo, da eseguire sul layer 'strade provinciali', prende come parametro in ingresso il nome di una strada (formato 'pXXX') 
+e produce una lista di coordinate di punti posti a intervalli fissi lungo la strada.\n\n
+            Per ogni punto nella lista si ottengono:\n
+              • Distanza dall'origine (m)\n
+              • Latitude and Longitude (WGS 84)\n"
+              • Orientamento verso il punto successivo (°)\n\n
+            Results are saved as a JSON file.'''
+        )
 
     def createInstance(self):
         return StradeSampler()
@@ -79,13 +69,14 @@ class StradeSampler(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterString(
                 self.PARAM_NAME,
-                'Feature name (value of the "{}" field)'.format(NAME_FIELD),
+                'Strada su cui effettuare l\' analisi (corrispondente al campo "{}" del layer Strade provinciale)'.format(NAME_FIELD),
             )
         )
+
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.PARAM_OUTPUT,
-                'Output JSON file',
+                'File di output',
                 fileFilter='JSON files (*.json)',
             )
         )
@@ -95,13 +86,13 @@ class StradeSampler(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
 
         # 1. Read input parameters
-        target_name = self.parameterAsString(parameters, self.PARAM_NAME, context).strip()
+        target_road = self.parameterAsString(parameters, self.PARAM_ROAD, context).strip()
         output_path = self.parameterAsFileOutput(parameters, self.PARAM_OUTPUT, context)
 
-        if not target_name:
+        if not target_road:
             raise QgsProcessingException("The 'name' parameter cannot be empty.")
 
-        feedback.pushInfo(f"Looking for feature with {NAME_FIELD} = '{target_name}' ...")
+        feedback.pushInfo(f"Looking for feature with {NAME_FIELD} = '{target_road}' ...")
 
         # 2. Locate the 'strade' layer
         layers = QgsProject.instance().mapLayersByName(LAYER_NAME)
@@ -114,13 +105,13 @@ class StradeSampler(QgsProcessingAlgorithm):
         # 3. Find the feature whose NAME_FIELD matches target_name
         feature = None
         for feat in layer.getFeatures():
-            if str(feat[NAME_FIELD]).strip() == target_name:
+            if str(feat[NAME_FIELD]).strip() == target_road:
                 feature = feat
                 break
 
         if feature is None:
             raise QgsProcessingException(
-                f"No feature with {NAME_FIELD} = '{target_name}' was found in '{LAYER_NAME}'."
+                f"No feature with {NAME_FIELD} = '{target_road}' was found in '{LAYER_NAME}'."
             )
 
         # 4. Set up coordinate transform (EPSG:32632 → EPSG:4326)
@@ -186,7 +177,7 @@ class StradeSampler(QgsProcessingAlgorithm):
 
         # 7. Write JSON output
         output_data = {
-            'feature_name': target_name,
+            'feature_name': target_road,
             'layer':        LAYER_NAME,
             'crs_source':   SRC_CRS,
             'crs_output':   DST_CRS,
