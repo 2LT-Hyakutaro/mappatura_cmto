@@ -68,7 +68,7 @@ e produce una lista di coordinate di punti posti a intervalli fissi lungo la str
     def initAlgorithm(self, config=None):
         self.addParameter(
             QgsProcessingParameterString(
-                self.PARAM_NAME,
+                self.PARAM_ROAD,
                 'Strada su cui effettuare l\' analisi (corrispondente al campo "{}" del layer Strade provinciale)'.format(NAME_FIELD),
             )
         )
